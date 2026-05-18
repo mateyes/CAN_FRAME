@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单帧传送格式 - 码字生成工具</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --card2: #273449;
+    --border: #334155;
+    --fg: #e2e8f0;
+    --fg2: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #34d399;
+    --orange: #fb923c;
+    --red: #f87171;
+    --yellow: #fbbf24;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .header h1 {
+    font-size: 24px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px;
+  }
+  .header p { color: var(--fg2); font-size: 13px; }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-arb { background: var(--accent); }
+  .dot-ctrl { background: var(--orange); }
+  .dot-data { background: var(--green); }
+  .dot-out { background: var(--accent2); }
+
+  /* Field rows */
+  .field-group {
+    margin-bottom: 14px;
+  }
+  .field-group:last-child { margin-bottom: 0; }
+  .field-label {
+    font-size: 12px;
+    color: var(--fg2);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field-label .bits {
+    background: var(--card2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--accent);
+    font-family: 'Consolas', monospace;
+  }
+  .field-label .fixed {
+    color: var(--yellow);
+    font-size: 11px;
+  }
+  .field-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .field-input {
+    flex: 1;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--fg);
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(56,189,248,0.15);
+  }
+  .field-input.fixed-val {
+    background: rgba(251,191,36,0.08);
+    border-color: rgba(251,191,36,0.3);
+    color: var(--yellow);
+    cursor: default;
+  }
+  .field-input[readonly] { opacity: 0.7; }
+  .field-unit {
+    font-size: 11px;
+    color: var(--fg2);
+    white-space: nowrap;
+  }
+
+  /* Bit visualization */
+  .bit-visual {
+    display: flex;
+    gap: 2px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .bit-cell {
+    width: 22px; height: 22px;
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-family: 'Consolas', monospace;
+    color: var(--fg2);
+    transition: all 0.2s;
+  }
+  .bit-cell.active {
+    background: rgba(56,189,248,0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .bit-cell.fixed {
+    background: rgba(251,191,36,0.1);
+    border-color: rgba(251,191,36,0.3);
+    color: var(--yellow);
+  }
+  .bit-sep {
+    width: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--border);
+    font-size: 10px;
+  }
+
+  /* Data bytes */
+  .data-bytes {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .data-byte-item {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .data-byte-item label {
+    font-size: 11px;
+    color: var(--fg2);
+  }
+  .data-byte-item input {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--fg);
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    outline: none;
+    text-align: center;
+    transition: border-color 0.2s;
+  }
+  .data-byte-item input:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 2px rgba(52,211,153,0.15);
+  }
+  .data-byte-item input.sum-field {
+    background: rgba(129,140,248,0.08);
+    border-color: rgba(129,140,248,0.3);
+    color: var(--accent2);
+    cursor: default;
+  }
+
+  /* DLC control */
+  .dlc-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .dlc-control label { font-size: 13px; color: var(--fg2); }
+  .dlc-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  .dlc-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    background: var(--green);
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .dlc-value {
+    background: var(--card2);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 14px;
+    color: var(--green);
+    min-width: 30px;
+    text-align: center;
+  }
+
+  /* Output */
+  .output-section { grid-column: 1 / -1; }
+  .output-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .output-box {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .output-box-title {
+    font-size: 12px;
+    color: var(--fg2);
+    margin-bottom: 8px;
+  }
+  .output-value {
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 16px;
+    word-break: break-all;
+    line-height: 1.6;
+    letter-spacing: 1px;
+  }
+  .output-value.id-out { color: var(--accent); }
+  .output-value.frame-out { color: var(--green); }
+  .output-value .sep { color: var(--fg2); margin: 0 2px; }
+  .output-value .highlight { color: var(--yellow); }
+
+  /* Byte detail table */
+  .byte-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+  .byte-table th, .byte-table td {
+    padding: 6px 10px;
+    text-align: center;
+    font-size: 12px;
+    border: 1px solid var(--border);
+  }
+  .byte-table th {
+    background: var(--card2);
+    color: var(--fg2);
+    font-weight: 600;
+  }
+  .byte-table td {
+    font-family: 'Consolas', monospace;
+    color: var(--fg);
+  }
+  .byte-table td.field-name {
+    color: var(--fg2);
+    font-family: 'Microsoft YaHei', sans-serif;
+    text-align: left;
+    font-size: 11px;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+    justify-content: center;
+  }
+  .btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+  }
+  .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+  .btn-secondary {
+    background: var(--card2);
+    color: var(--fg2);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--fg2); color: var(--fg); }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--red);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.3s;
+    z-index: 100;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Input mode toggle */
+  .input-mode {
+    display: flex;
+    gap: 4px;
+    background: var(--card2);
+    border-radius: 6px;
+    padding: 3px;
+    margin-bottom: 14px;
+  }
+  .input-mode button {
+    flex: 1;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--fg2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .input-mode button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  @media (max-width: 768px) {
+    .container { grid-template-columns: 1fr; }
+    .output-grid { grid-template-columns: 1fr; }
+    .data-bytes { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<div class="header">
+  <h1>单帧传送格式 · 码字生成工具</h1>
+  <p>基于 CAN 2.0B 扩展帧协议 — 按《表4 单帧传送格式》规范生成完整帧十六进制码字</p>
+</div>
+
+<div class="container">
+  <!-- 仲裁场 -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot dot-arb"></span>仲裁场（4字节）</div>
+
+    <div class="input-mode">
+      <button class="active" onclick="setInputMode('hex', this)">十六进制输入</button>
+      <button onclick="setInputMode('bin', this)">二进制输入</button>
+      <button onclick="setInputMode('dec', this)">十进制输入</button>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">优先级 <span class="bits">ID[28:27] · 2bit</span></div>
+      <div class="field-row">
+        <input class="field-input" id="priority" placeholder="0~3" maxlength="2" oninput="onFieldChange()">
+        <span class="field-unit" id="priority-hint">HEX</span>
+      </div>
+      <div class="bit-visual" id="priority-bits"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">源节点地址 <span class="bits">ID[26:21] · 6bit</span></div>
+      <div class="field-row">
+        <input class="field-input" id="srcAddr" placeholder="0~63" maxlength="2" oninput="onFieldChange()">
+        <span class="field-unit" id="srcAddr-hint">HEX</span>
+      </div>
+      <div class="bit-visual" id="srcAddr-bits"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">组播标识 <span class="bits">ID[20:19] · 2bit</span></div>
+      <div class="field-row">
+        <input class="field-input" id="multicast" placeholder="0~3" maxlength="2" oninput="onFieldChange()">
+        <span class="field-unit" id="multicast-hint">HEX</span>
+      </div>
+      <div class="bit-visual" id="multicast-bits"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">目的节点地址 <span class="bits">ID[18:13] · 6bit</span></div>
+      <div class="field-row">
+        <input class="field-input" id="dstAddr" placeholder="0~63" maxlength="2" oninput="onFieldChange()">
+        <span class="field-unit" id="dstAddr-hint">HEX</span>
+      </div>
+      <div class="bit-visual" id="dstAddr-bits"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">帧序号标志 <span class="bits">ID[12:11]</span> <span class="fixed">固定 = 11b</span></div>
+      <div class="field-row">
+        <input class="field-input fixed-val" value="11b" readonly>
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">帧序号 <span class="bits">ID[10:5] · 6bit</span></div>
+      <div class="field-row">
+        <input class="field-input" id="frameSeq" placeholder="0~63" maxlength="2" oninput="onFieldChange()">
+        <span class="field-unit" id="frameSeq-hint">HEX</span>
+      </div>
+      <div class="bit-visual" id="frameSeq-bits"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">功能码 <span class="bits">ID[4:0] · 5bit</span></div>
+      <div class="field-row">
+        <input class="field-input" id="funcCode" placeholder="0~31" maxlength="2" oninput="onFieldChange()">
+        <span class="field-unit" id="funcCode-hint">HEX</span>
+      </div>
+      <div class="bit-visual" id="funcCode-bits"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">固定位 <span class="bits">SRR=1b, IDE=1b, RTR=0b</span></div>
+      <div class="field-row">
+        <input class="field-input fixed-val" value="SRR=1  IDE=1  RTR=0" readonly style="font-size:12px;">
+      </div>
+    </div>
+  </div>
+
+  <!-- 控制场 + 数据场 -->
+  <div class="panel">
+    <div class="panel-title"><span class="dot dot-ctrl"></span>控制场（1字节）</div>
+
+    <div class="field-group">
+      <div class="field-label">保留位 <span class="bits">r1=0b, r0=0b</span> <span class="fixed">固定</span></div>
+      <div class="field-row">
+        <input class="field-input fixed-val" value="r1=0  r0=0" readonly style="font-size:12px;">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">数据帧长度 DLC <span class="bits">4bit · 1~8</span> <span class="fixed">(含1字节SUM校验)</span></div>
+      <div class="dlc-control">
+        <input type="range" class="dlc-slider" id="dlcSlider" min="1" max="8" value="4" oninput="onDlcChange()">
+        <span class="dlc-value" id="dlcValue">4</span>
+      </div>
+      <div class="bit-visual" id="dlc-bits"></div>
+    </div>
+
+    <div class="panel-title" style="margin-top:20px;"><span class="dot dot-data"></span>数据场</div>
+
+    <div class="field-group">
+      <div class="field-label">信息数据包 <span class="bits">Byte₀ ~ Byteₙ₋₁</span></div>
+      <div class="data-bytes" id="dataBytes"></div>
+    </div>
+
+    <div class="field-group" style="margin-top:12px;">
+      <div class="field-label">校验字节 <span class="bits">SUM</span> <span class="fixed">自动计算: Byte₀~Byteₙ₋₁ 累加和低字节</span></div>
+      <div class="field-row">
+        <input class="field-input fixed-val" id="sumField" value="00" readonly style="max-width:120px; text-align:center;">
+      </div>
+    </div>
+  </div>
+
+  <!-- 输出 -->
+  <div class="panel output-section">
+    <div class="panel-title"><span class="dot dot-out"></span>生成结果</div>
+    <div class="output-grid">
+      <div class="output-box">
+        <div class="output-box-title">29位扩展标识符 (ID)</div>
+        <div class="output-value id-out" id="idOutput">-</div>
+      </div>
+      <div class="output-box">
+        <div class="output-box-title">完整帧十六进制码字</div>
+        <div class="output-value frame-out" id="frameOutput">-</div>
+      </div>
+    </div>
+
+    <table class="byte-table" id="byteTable">
+      <thead>
+        <tr>
+          <th>字节序</th>
+          <th>字段说明</th>
+          <th>二进制</th>
+          <th>十六进制</th>
+        </tr>
+      </thead>
+      <tbody id="byteTableBody"></tbody>
+    </table>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="generateFrame()">生成码字</button>
+      <button class="btn btn-secondary" onclick="copyResult()">复制结果</button>
+      <button class="btn btn-secondary" onclick="resetAll()">重置</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let inputMode = 'hex'; // hex, bin, dec
+
+function setInputMode(mode, btn) {
+  inputMode = mode;
+  document.querySelectorAll('.input-mode button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Update hints
+  const labels = { hex: 'HEX', bin: 'BIN', dec: 'DEC' };
+  ['priority','srcAddr','multicast','dstAddr','frameSeq','funcCode'].forEach(id => {
+    document.getElementById(id + '-hint').textContent = labels[mode];
+  });
+  onFieldChange();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function parseInput(val, maxBits) {
+  val = val.trim();
+  if (!val) return null;
+  const maxVal = (1 << maxBits) - 1;
+  let num;
+  if (inputMode === 'hex') {
+    if (val.endsWith('h') || val.endsWith('H')) val = val.slice(0, -1);
+    num = parseInt(val, 16);
+  } else if (inputMode === 'bin') {
+    if (val.endsWith('b') || val.endsWith('B')) val = val.slice(0, -1);
+    num = parseInt(val, 2);
+  } else {
+    num = parseInt(val, 10);
+  }
+  if (isNaN(num) || num < 0 || num > maxVal) return undefined;
+  return num;
+}
+
+function toBin(val, bits) {
+  if (val === null || val === undefined) return '-'.repeat(bits);
+  return val.toString(2).padStart(bits, '0');
+}
+
+function toHex(val, digits) {
+  if (val === null || val === undefined) return '-'.repeat(digits);
+  return val.toString(16).toUpperCase().padStart(digits, '0');
+}
+
+function renderBitVisual(containerId, val, totalBits, fixedBits) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = '';
+  const binStr = val !== null && val !== undefined ? toBin(val, totalBits) : null;
+  for (let i = 0; i < totalBits; i++) {
+    if (i > 0 && (totalBits - i) % 4 === 0) {
+      const sep = document.createElement('span');
+      sep.className = 'bit-sep';
+      sep.textContent = ' ';
+      container.appendChild(sep);
+    }
+    const cell = document.createElement('span');
+    cell.className = 'bit-cell';
+    if (fixedBits && fixedBits[i]) {
+      cell.classList.add('fixed');
+      cell.textContent = fixedBits[i];
+    } else if (binStr) {
+      cell.classList.add('active');
+      cell.textContent = binStr[i];
+    } else {
+      cell.textContent = '-';
+    }
+    container.appendChild(cell);
+  }
+}
+
+function onFieldChange() {
+  // Priority
+  const p = parseInput(document.getElementById('priority').value, 2);
+  renderBitVisual('priority-bits', p, 2);
+
+  // Source address
+  const s = parseInput(document.getElementById('srcAddr').value, 6);
+  renderBitVisual('srcAddr-bits', s, 6);
+
+  // Multicast
+  const m = parseInput(document.getElementById('multicast').value, 2);
+  renderBitVisual('multicast-bits', m, 2);
+
+  // Dest address
+  const d = parseInput(document.getElementById('dstAddr').value, 6);
+  renderBitVisual('dstAddr-bits', d, 6);
+
+  // Frame sequence
+  const f = parseInput(document.getElementById('frameSeq').value, 6);
+  renderBitVisual('frameSeq-bits', f, 6);
+
+  // Function code
+  const fc = parseInput(document.getElementById('funcCode').value, 5);
+  renderBitVisual('funcCode-bits', fc, 5);
+
+  // Auto generate
+  generateFrame();
+}
+
+function onDlcChange() {
+  const dlc = parseInt(document.getElementById('dlcSlider').value);
+  document.getElementById('dlcValue').textContent = dlc;
+  renderBitVisual('dlc-bits', dlc, 4);
+  buildDataBytes(dlc);
+  generateFrame();
+}
+
+function buildDataBytes(dlc) {
+  const container = document.getElementById('dataBytes');
+  container.innerHTML = '';
+  // DLC = 用户数据字节数 + 1(SUM校验字节)，所以用户数据输入框 = DLC - 1
+  const userDataCount = Math.max(0, dlc - 1);
+  for (let i = 0; i < userDataCount; i++) {
+    const item = document.createElement('div');
+    item.className = 'data-byte-item';
+    const label = document.createElement('label');
+    label.textContent = `Byte${subscript(i)}`;
+    const input = document.createElement('input');
+    input.id = `data${i}`;
+    input.placeholder = '00';
+    input.maxLength = 2;
+    input.oninput = () => generateFrame();
+    item.appendChild(label);
+    item.appendChild(input);
+    container.appendChild(item);
+  }
+}
+
+function subscript(n) {
+  const subs = '₀₁₂₃₄₅₆₇₈₉';
+  return String(n).split('').map(d => subs[parseInt(d)]).join('');
+}
+
+function generateFrame() {
+  const p = parseInput(document.getElementById('priority').value, 2);
+  const s = parseInput(document.getElementById('srcAddr').value, 6);
+  const m = parseInput(document.getElementById('multicast').value, 2);
+  const d = parseInput(document.getElementById('dstAddr').value, 6);
+  const f = parseInput(document.getElementById('frameSeq').value, 6);
+  const fc = parseInput(document.getElementById('funcCode').value, 5);
+  const dlc = parseInt(document.getElementById('dlcSlider').value);
+
+  // Validate
+  if ([p, s, m, d, f, fc].some(v => v === undefined)) {
+    document.getElementById('idOutput').textContent = '请填写所有仲裁场字段';
+    document.getElementById('frameOutput').textContent = '-';
+    document.getElementById('byteTableBody').innerHTML = '';
+    return;
+  }
+
+  // Build 29-bit ID: ID[28:0]
+  // ID[28:27] = priority (2bit)
+  // ID[26:21] = srcAddr (6bit)
+  // ID[20:19] = multicast (2bit)
+  // ID[18:13] = dstAddr (6bit)
+  // ID[12:11] = 11b (fixed)
+  // ID[10:5]  = frameSeq (6bit)
+  // ID[4:0]   = funcCode (5bit)
+  const id29 = (p << 27) | (s << 21) | (m << 19) | (d << 13) | (0b11 << 11) | (f << 5) | fc;
+
+  // 根据表4单帧传送格式，前5字节的位分配（CAN扩展帧格式）：
+  // Byte0: ID[28:27] + ID[26:21] = 优先级(2bit) + 源节点地址(6bit)
+  const byte0 = (id29 >> 21) & 0xFF;
+  
+  // Byte1: ID[20:19] + ID[18] + SRR + IDE + ID[17:15]
+  const byte1 = ((m & 0x3) << 6) |               // ID[20:19] 组播标识
+                ((d & 0x20) << 0) |              // ID[18] 目的地址bit5
+                (0b1 << 4) |                     // SRR = 1
+                (0b1 << 3) |                     // IDE = 1
+                ((d >> 2) & 0x7);                // ID[17:15] 目的地址bit4:2
+  
+  // Byte2: ID[14:13] + ID[12:11] + ID[10:7]
+  // 其中ID[12:11]=11b（帧序号标志）
+  const byte2 = ((d & 0x3) << 6) |               // ID[14:13] 目的地址bit1:0
+                (0b11 << 4) |                    // ID[12:11] = 11b
+                ((f >> 2) & 0xF);                // ID[10:7] 帧序号高4位
+  
+  // Byte3: ID[6:5] + ID[4:0] + RTR
+  // ID[6:5] = 帧序号低2位, ID[4:0] = 功能码
+  const byte3 = ((f & 0x3) << 6) |               // ID[6:5] 帧序号低2位
+                ((fc & 0x1F) << 1) |             // ID[4:0] 功能码
+                0b0;                             // RTR = 0
+  
+  // Byte4: 00B + r1 + r0 + DLC (共8bit, DLC占用低4bit)
+  // r1=0, r0=0 为固定保留位
+  const byte4 = (0b00 << 6) |                    // 高2位固定为0
+                (0 << 5) |                       // r1 = 0
+                (0 << 4) |                       // r0 = 0
+                (dlc & 0x0F);                    // DLC (4bit)
+
+  // 读取用户数据字节 (DLC-1 个)
+  const userDataCount_read = Math.max(0, dlc - 1);
+  const dataBytes = [];
+  let valid = true;
+  for (let i = 0; i < userDataCount_read; i++) {
+    const el = document.getElementById(`data${i}`);
+    const val = el ? el.value.trim() : '';
+    if (!val) {
+      dataBytes.push(0);
+    } else {
+      let num;
+      if (val.endsWith('h') || val.endsWith('H')) num = parseInt(val.slice(0,-1), 16);
+      else num = parseInt(val, 16);
+      if (isNaN(num) || num < 0 || num > 255) {
+        valid = false;
+        dataBytes.push(0);
+      } else {
+        dataBytes.push(num);
+      }
+    }
+  }
+
+  if (!valid) {
+    showToast('数据字节请输入有效的十六进制值 (00~FF)');
+  }
+
+  // 校验和计算: SUM = (Byte₀ + Byte₁ + ... + Byteₙ₋₂) & 0xFF
+  // DLC = 用户数据字节数 + 1(SUM校验字节)
+  const userDataCount = Math.max(0, dlc - 1);
+  let sum = 0;
+  for (let i = 0; i < userDataCount; i++) {
+    sum = (sum + dataBytes[i]) & 0xFF;
+  }
+  // If DLC=1, no user data, SUM=0
+  if (userDataCount <= 0) sum = 0;
+
+  document.getElementById('sumField').value = toHex(sum, 2);
+
+  // Build complete frame
+  const frame = [byte0, byte1, byte2, byte3, byte4];
+  for (let i = 0; i < userDataCount; i++) {
+    frame.push(dataBytes[i]);
+  }
+  frame.push(sum);
+
+  // Display ID
+  const idHex = toHex(id29, 8);
+  document.getElementById('idOutput').innerHTML =
+    `0x${idHex} <span class="sep">(${toBin(id29, 29)})</span>`;
+
+  // Display frame
+  const frameHex = frame.map(b => toHex(b, 2)).join(' ');
+  document.getElementById('frameOutput').innerHTML = frameHex;
+
+  // Build byte table
+  const tbody = document.getElementById('byteTableBody');
+  tbody.innerHTML = '';
+
+  const byteDescriptions = [
+    'Byte0: ID[28:27]+ID[26:21] (优先级+源节点地址)',
+    'Byte1: ID[20:19]+ID[18]+SRR+IDE+ID[17:15] (组播+目的+RTR)',
+    'Byte2: ID[14:13]+ID[12:11]+ID[10:7] (目的低2bit+标志+帧序号高4bit)',
+    'Byte3: ID[6:5]+ID[4:0]+RTR (帧序号低2bit+功能码)',
+    'Byte4: 00+r1+r0+DLC (控制场)'
+  ];
+  for (let i = 0; i < 5; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>Byte${subscript(i)}</td>
+      <td class="field-name">${byteDescriptions[i]}</td>
+      <td>${toBin(frame[i], 8)}</td>
+      <td>${toHex(frame[i], 2)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  for (let i = 0; i < userDataCount; i++) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>Byte${subscript(5 + i)}</td>
+      <td class="field-name">数据场 信息数据包</td>
+      <td>${toBin(frame[5 + i], 8)}</td>
+      <td>${toHex(frame[5 + i], 2)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  // SUM byte
+  const sumIdx = 5 + userDataCount;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>Byte${subscript(sumIdx)}</td>
+    <td class="field-name">数据场 校验字节 (SUM)</td>
+    <td>${toBin(sum, 8)}</td>
+    <td style="color:var(--accent2)">${toHex(sum, 2)}</td>
+  `;
+  tbody.appendChild(tr);
+
+  return frame;
+}
+
+function copyResult() {
+  const text = document.getElementById('frameOutput').textContent;
+  if (!text || text === '-') {
+    showToast('没有可复制的内容');
+    return;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('已复制到剪贴板');
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('已复制到剪贴板');
+  });
+}
+
+function resetAll() {
+  ['priority','srcAddr','multicast','dstAddr','frameSeq','funcCode'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('dlcSlider').value = 4;
+  onDlcChange();
+  onFieldChange();
+}
+
+// Init
+buildDataBytes(4);
+onFieldChange();
+onDlcChange();
+</script>
+</body>
+</html>
